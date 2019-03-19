@@ -1,0 +1,26 @@
+{
+    "name": "mageinn/seo",
+    "description": "Seo",
+    "require": {
+        "magento/framework": "100.1.*"
+    },
+    "license":[
+        "OSL-3.0"
+    ],
+    "type": "magento2-module",
+    "version": "1.0.0",
+    "authors":[
+        {
+            "name": "Mageinn",
+            "email": "sales@mageinn.com",
+            "homepage": "mageinn.com",
+            "role": "Company"
+        }
+    ],
+    "autoload": {
+        "files":["registration.php" ],
+        "psr-4": {
+            "Mageinn\\Seo\\": ""
+        }
+    }
+}
