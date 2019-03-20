@@ -32,6 +32,9 @@
     <type name="Magento\Framework\View\Page\Config">
         <plugin name="removeMetaDescription" type="Mageinn\Seo\Plugin\PageConfig\RemoveMeta" sortOrder="9999"/>
     </type>
+    <type name="Magento\Sitemap\Model\Sitemap">
+        <plugin name="Mageinn_SiteMap_Plugin" type="Mageinn\Seo\Plugin\SitemapModelPlugin" sortOrder="10" disabled="false"/>
+    </type>
     <preference for="Magento\Catalog\ViewModel\Product\Breadcrumbs" type="Mageinn\Seo\ViewModel\Product\Breadcrumbs" />
     <preference for="Magento\Framework\View\Page\Title" type="Mageinn\Seo\Model\View\Page\Title" />
     <preference for="Magento\Theme\Block\Html\Pager" type="Mageinn\Seo\Block\Html\Pager" />
