@@ -26,9 +26,6 @@
 
 namespace Mageinn\Seo\Plugin;
 
-
-use Mageinn\Seo\Model\ResourceModel\Sitemap\CollectionFactory;
-
 /**
  * Class SitemapModelPlugin
  * @package Mageinn\SiteMap\Plugin
@@ -39,15 +36,22 @@ class SitemapModelPlugin
      * @var CollectionFactory
      */
     protected $collectionFactory;
+
+    /**
+     * @var \Mageinn\Seo\Helper\Data
+     */
+    protected $helper;
     /**
      * SitemapModelPlugin constructor.
      * @param CollectionFactory $collectionFactory
      */
     public function __construct(
-        CollectionFactory $collectionFactory
+        \Mageinn\Seo\Model\ResourceModel\Sitemap\CollectionFactory $collectionFactory,
+        \Mageinn\Seo\Helper\Data $helper
     )
     {
         $this->collectionFactory = $collectionFactory;
+        $this->helper = $helper;
     }
     /**
      * @param \Magento\Sitemap\Model\Sitemap $sitemap
@@ -57,7 +61,13 @@ class SitemapModelPlugin
      * @throws \Magento\Framework\Exception\LocalizedException
      * @throws \Magento\Framework\Exception\ValidatorException
      */
-    public function aroundGenerateXml(\Magento\Sitemap\Model\Sitemap $sitemap, callable $proceed ) {
+    public function aroundGenerateXml(\Magento\Sitemap\Model\Sitemap $sitemap, callable $proceed)
+    {
+        if(!$this->helper->getActiveFlag())
+        {
+            return $proceed();
+        }
+
         $collection = $this->collectionFactory->create();
         /**
          * @var $overridedSitemap \Mageinn\Seo\Model\Sitemap
@@ -65,6 +75,7 @@ class SitemapModelPlugin
         $collection->addFilter($sitemap->getIdFieldName(), $sitemap->getId());
         $overriddenSitemap = $collection->getFirstItem();
         $overriddenSitemap->createSitemapFiles();
+
         return $sitemap;
     }
 }
