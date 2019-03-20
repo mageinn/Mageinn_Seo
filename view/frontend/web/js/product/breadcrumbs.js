@@ -28,12 +28,6 @@ define([
           * @private
           */
          _appendCatalogCrumbs: function () {
-            // var categoryCrumbs = this._resolveCategoryCrumbs();
-            //
-            // categoryCrumbs.forEach(function (crumbInfo) {
-            //     breadcrumbList.push(crumbInfo);
-            // });
-            console.log('WORK');
             if (this.options.mainCategory) {
                breadcrumbList.push(this.options.mainCategory);
             }

@@ -29,5 +29,8 @@
     <type name="Magento\Catalog\Block\Product\View\Gallery">
         <plugin name="updateGalleryItemsData" type="Mageinn\Seo\Plugin\UpdateGalleryItemsData"/>
     </type>
+    <type name="Magento\Framework\View\Page\Config">
+        <plugin name="removeMetaDescription" type="Mageinn\Seo\Plugin\PageConfig\RemoveMeta" sortOrder="9999"/>
+    </type>
     <preference for="Magento\Catalog\ViewModel\Product\Breadcrumbs" type="Mageinn\Seo\ViewModel\Product\Breadcrumbs" />
 </config>
