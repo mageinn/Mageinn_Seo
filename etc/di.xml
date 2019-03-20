@@ -33,4 +33,5 @@
         <plugin name="removeMetaDescription" type="Mageinn\Seo\Plugin\PageConfig\RemoveMeta" sortOrder="9999"/>
     </type>
     <preference for="Magento\Catalog\ViewModel\Product\Breadcrumbs" type="Mageinn\Seo\ViewModel\Product\Breadcrumbs" />
+    <preference for="Magento\Framework\View\Page\Title" type="Mageinn\Seo\Model\View\Page\Title" />
 </config>
