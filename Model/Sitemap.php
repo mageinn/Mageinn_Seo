@@ -32,6 +32,7 @@ use Magento\Sitemap\Model\SitemapItemInterface;
 use Magento\UrlRewrite\Model\OptionProvider;
 use Magento\UrlRewrite\Model\UrlFinderInterface;
 use Magento\UrlRewrite\Service\V1\Data\UrlRewrite;
+use Magento\Framework\Exception\LocalizedException;
 /**
  * Class Sitemap
  * @package Mageinn\SiteMap\Model
@@ -42,6 +43,13 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      * @var UrlFinderInterface
      */
     protected $urlFinder;
+
+    /**
+     * Current sitemapImages increment
+     *
+     * @var int
+     */
+    protected $_sitemapImagesIncrement = 0;
 
     /**
      * Sitemap constructor.
@@ -134,11 +142,7 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      */
     protected function createSitemapFileWithImages()
     {
-        $filename = $this->getSitemapFilename();
-        $ext = pathinfo($filename, PATHINFO_EXTENSION);
-        $filename = pathinfo($filename, PATHINFO_FILENAME);
-        $filename = sprintf('%sImages.%s', $filename, $ext);
-        $this->createSitemapFile($filename, true);
+        $this->createSitemapImagesFile($this->getSitemapImagesFilename(), true);
     }
     /**
      * @throws \Magento\Framework\Exception\FileSystemException
@@ -149,7 +153,10 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
     {
         $this->createSitemapFile($this->getSitemapFilename(), false);
     }
+
     /**
+     * Create Sitemap.xml file without images
+     *
      * @param string $filename
      * @param bool $withImages
      * @throws \Magento\Framework\Exception\FileSystemException
@@ -158,6 +165,7 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      */
     protected function createSitemapFile(string $filename, bool $withImages)
     {
+        // $_sitemapIncrement 600
         /** @var $item SitemapItemInterface */
         foreach ($this->_sitemapItems as $item) {
             $url = $this->replaceUrlWithRewrite( $item->getUrl() );
@@ -171,7 +179,7 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
                 $item->getUpdatedAt(),
                 $item->getChangeFrequency(),
                 $item->getPriority(),
-                $withImages? $item->getImages() : null
+                $withImages ? $item->getImages() : null
             );
             if ($this->_isSplitRequired($xml) && $this->_sitemapIncrement > 0) {
                 $this->_finalizeSitemap();
@@ -183,16 +191,148 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
             $this->_lineCount++;
             $this->_fileSize += strlen($xml);
         }
+
         $this->_finalizeSitemap();
-        $path = rtrim(
-                $this->getSitemapPath(),
-                '/'
-            ) . '/' . $this->_getCurrentSitemapFilename(
-                $this->_sitemapIncrement
-            );
-        $destination = rtrim($this->getSitemapPath(), '/') . '/' . $filename;
-        $this->_directory->renameFile($path, $destination);
+
+        if ($this->_sitemapIncrement == 1) {
+            // In case when only one increment file was created use it as default sitemap
+            $path = rtrim(
+                    $this->getSitemapPath(),
+                    '/'
+                ) . '/' . $this->_getCurrentSitemapFilename(
+                    $this->_sitemapIncrement
+                );
+            $destination = rtrim($this->getSitemapPath(), '/') . '/' . $filename;
+
+            $this->_directory->renameFile($path, $destination);
+        } else {
+            // Otherwise create index file with list of generated sitemaps
+            $this->_createSitemapIndex();
+        }
     }
+
+    /**
+     * Create SitemapImages.xml file with images
+     *
+     * @param string $filename
+     * @param bool $withImages
+     * @throws \Magento\Framework\Exception\FileSystemException
+     * @throws \Magento\Framework\Exception\LocalizedException
+     * @throws \Magento\Framework\Exception\ValidatorException
+     */
+    private function createSitemapImagesFile(string $filename, bool $withImages)
+    {
+        // $_sitemapIncrement 600
+        /** @var $item SitemapItemInterface */
+        foreach ($this->_sitemapItems as $item) {
+            $url = $this->replaceUrlWithRewrite( $item->getUrl() );
+            if( $withImages && empty( $item->getImages() ) ) {
+                continue;
+            }
+
+            $url = $this->checkUrlForUrlRewriteWithTrailingSlash( $url );
+            $xml = $this->_getSitemapRow(
+                $url,
+                $item->getUpdatedAt(),
+                $item->getChangeFrequency(),
+                $item->getPriority(),
+                $withImages ? $item->getImages() : null
+            );
+            if ($this->_isSplitRequired($xml) && $this->_sitemapImagesIncrement > 0) {
+                $this->_finalizeSitemap();
+            }
+            if (!$this->_fileSize) {
+                $this->createSitemapImages();
+            }
+            $this->_writeSitemapRow($xml);
+            $this->_lineCount++;
+            $this->_fileSize += strlen($xml);
+        }
+
+        $this->_finalizeSitemap();
+
+        if ($this->_sitemapImagesIncrement == 1) {
+            // In case when only one increment file was created use it as default sitemap
+            $path = rtrim(
+                    $this->getSitemapPath(),
+                    '/'
+                ) . '/' . $this->getCurrentSitemapImagesFilename(
+                    $this->_sitemapImagesIncrement
+                );
+            $destination = rtrim($this->getSitemapPath(), '/') . '/' . $filename;
+
+            $this->_directory->renameFile($path, $destination);
+        } else {
+            // Otherwise create index file with list of generated sitemaps
+            $this->createSitemapImagesIndex();
+        }
+    }
+
+    /**
+     * Generate sitemap index XML file
+     *
+     * @param string $filename
+     * @return void
+     */
+    private function createSitemapImagesIndex()
+    {
+        $this->createSitemapImages($this->getSitemapImagesFilename(), self::TYPE_INDEX);
+        for ($i = 1; $i <= $this->_sitemapIncrement; $i++) {
+            $xml = $this->_getSitemapIndexRow($this->getCurrentSitemapImagesFilename($i), $this->_getCurrentDateTime());
+            $this->_writeSitemapRow($xml);
+        }
+        $this->_finalizeSitemap(self::TYPE_INDEX);
+    }
+
+    /**
+     * Get current sitemapImages filename
+     *
+     * @param int $index
+     * @return string
+     */
+    private function getCurrentSitemapImagesFilename($index)
+    {
+        return str_replace('.xml', '', $this->getSitemapImagesFilename()) . '-' . $this->getStoreId() . '-' . $index . '.xml';
+    }
+
+
+    /**
+     * Create new sitemapImages file
+     *
+     * @param null|string $fileName
+     * @param string $type
+     * @return void
+     * @throws LocalizedException
+     */
+    private function createSitemapImages($fileName = null, $type = self::TYPE_URL)
+    {
+        if (!$fileName) {
+            $this->_sitemapImagesIncrement++;
+            $fileName = $this->getCurrentSitemapImagesFilename($this->_sitemapImagesIncrement);
+        }
+
+        $path = rtrim($this->getSitemapPath(), '/') . '/' . $fileName;
+        $this->_stream = $this->_directory->openFile($path);
+
+        $fileHeader = sprintf($this->_tags[$type][self::OPEN_TAG_KEY], $type);
+        $this->_stream->write($fileHeader);
+        $this->_fileSize = strlen($fileHeader . sprintf($this->_tags[$type][self::CLOSE_TAG_KEY], $type));
+    }
+
+
+    /**
+     * Return sitemap filename with images
+     *
+     * @return mixed|string
+     */
+    private function getSitemapImagesFilename(){
+        $filename = $this->getSitemapFilename();
+        $ext = pathinfo($filename, PATHINFO_EXTENSION);
+        $filename = pathinfo($filename, PATHINFO_FILENAME);
+        $filename = sprintf('%sImages.%s', $filename, $ext);
+        return $filename;
+    }
+
     /**
      * Check for url rewrite with trailing slash,
      * if this url rewrite exists return it trailing slash
