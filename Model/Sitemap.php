@@ -26,9 +26,6 @@
 
 namespace Mageinn\Seo\Model;
 
-use Magento\Sitemap\Model\ItemProvider\ItemProviderInterface;
-use Magento\Sitemap\Model\SitemapConfigReaderInterface;
-use Magento\Sitemap\Model\SitemapItemInterface;
 use Magento\UrlRewrite\Model\OptionProvider;
 use Magento\UrlRewrite\Model\UrlFinderInterface;
 use Magento\UrlRewrite\Service\V1\Data\UrlRewrite;
@@ -52,6 +49,12 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
     protected $_sitemapImagesIncrement = 0;
 
     /**
+     * @var \Mageinn\Seo\Helper\Data
+     */
+    protected $helper;
+
+
+    /**
      * Sitemap constructor.
      * @param \Magento\Framework\Model\Context $context
      * @param \Magento\Framework\Registry $registry
@@ -70,9 +73,6 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      * @param \Magento\Framework\Data\Collection\AbstractDb|null $resourceCollection
      * @param array $data
      * @param \Magento\Config\Model\Config\Reader\Source\Deployed\DocumentRoot|null $documentRoot
-     * @param ItemProviderInterface|null $itemProvider
-     * @param SitemapConfigReaderInterface|null $configReader
-     * @param \Magento\Sitemap\Model\SitemapItemInterfaceFactory|null $sitemapItemFactory
      */
     public function __construct(
         \Magento\Framework\Model\Context $context,
@@ -88,13 +88,11 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
         \Magento\Framework\App\RequestInterface $request,
         \Magento\Framework\Stdlib\DateTime $dateTime,
         UrlFinderInterface $urlFinder,
+        \Mageinn\Seo\Helper\Data $helper,
         \Magento\Framework\Model\ResourceModel\AbstractResource $resource = null,
         \Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null,
         array $data = [],
-        \Magento\Config\Model\Config\Reader\Source\Deployed\DocumentRoot $documentRoot = null,
-        ItemProviderInterface $itemProvider = null,
-        SitemapConfigReaderInterface $configReader = null,
-        \Magento\Sitemap\Model\SitemapItemInterfaceFactory $sitemapItemFactory = null
+        \Magento\Config\Model\Config\Reader\Source\Deployed\DocumentRoot $documentRoot = null
     )
     {
         parent::__construct(
@@ -113,12 +111,103 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
             $resource,
             $resourceCollection,
             $data,
-            $documentRoot,
-            $itemProvider,
-            $configReader,
-            $sitemapItemFactory
+            $documentRoot
         );
         $this->urlFinder = $urlFinder;
+        $this->helper = $helper;
+    }
+
+
+    /**
+     * Initialize sitemap
+     *
+     * @return void
+     */
+    protected function _initSitemapItems()
+    {
+
+        $this->collectSitemapItems();
+
+        $this->_tags = [
+            self::TYPE_INDEX => [
+                self::OPEN_TAG_KEY => '<?xml version="1.0" encoding="UTF-8"?>' .
+                    PHP_EOL .
+                    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' .
+                    PHP_EOL,
+                self::CLOSE_TAG_KEY => '</sitemapindex>',
+            ],
+            self::TYPE_URL => [
+                self::OPEN_TAG_KEY => '<?xml version="1.0" encoding="UTF-8"?>' .
+                    PHP_EOL .
+                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' .
+                    ' xmlns:content="http://www.google.com/schemas/sitemap-content/1.0"' .
+                    ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' .
+                    PHP_EOL,
+                self::CLOSE_TAG_KEY => '</urlset>',
+            ],
+        ];
+    }
+
+    /**
+     * Generate XML
+     *
+     * @return $this
+     */
+    public function generateXml()
+    {
+        $this->_initSitemapItems();
+
+        if($this->helper->getActiveFlag())
+        {
+            return $this->createSitemapFiles();
+        }
+
+        /** @var $sitemapItem \Magento\Framework\DataObject */
+        foreach ($this->_sitemapItems as $sitemapItem) {
+            $changefreq = $sitemapItem->getChangefreq();
+            $priority = $sitemapItem->getPriority();
+            foreach ($sitemapItem->getCollection() as $item) {
+                $xml = $this->_getSitemapRow(
+                    $item->getUrl(),
+                    $item->getUpdatedAt(),
+                    $changefreq,
+                    $priority,
+                    $item->getImages()
+                );
+                if ($this->_isSplitRequired($xml) && $this->_sitemapIncrement > 0) {
+                    $this->_finalizeSitemap();
+                }
+                if (!$this->_fileSize) {
+                    $this->_createSitemap();
+                }
+                $this->_writeSitemapRow($xml);
+                // Increase counters
+                $this->_lineCount++;
+                $this->_fileSize += strlen($xml);
+            }
+        }
+        $this->_finalizeSitemap();
+
+        if ($this->_sitemapIncrement == 1) {
+            // In case when only one increment file was created use it as default sitemap
+            $path = rtrim(
+                    $this->getSitemapPath(),
+                    '/'
+                ) . '/' . $this->_getCurrentSitemapFilename(
+                    $this->_sitemapIncrement
+                );
+            $destination = rtrim($this->getSitemapPath(), '/') . '/' . $this->getSitemapFilename();
+
+            $this->_directory->renameFile($path, $destination);
+        } else {
+            // Otherwise create index file with list of generated sitemaps
+            $this->_createSitemapIndex();
+        }
+
+        $this->setSitemapTime($this->_dateModel->gmtDate('Y-m-d H:i:s'));
+        $this->save();
+
+        return $this;
     }
     /**
      * @return $this
@@ -126,9 +215,8 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      * @throws \Magento\Framework\Exception\LocalizedException
      * @throws \Magento\Framework\Exception\ValidatorException
      */
-    public function createSitemapFiles()
+    protected function createSitemapFiles()
     {
-        $this->_initSitemapItems();
         $this->createSitemapFileWithoutImages();
         $this->createSitemapFileWithImages();
         $this->setSitemapTime($this->_dateModel->gmtDate('Y-m-d H:i:s'));
@@ -136,6 +224,8 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
         return $this;
     }
     /**
+     * Create Sitemap.xml file without images
+     *
      * @throws \Magento\Framework\Exception\FileSystemException
      * @throws \Magento\Framework\Exception\LocalizedException
      * @throws \Magento\Framework\Exception\ValidatorException
@@ -163,33 +253,37 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      * @throws \Magento\Framework\Exception\LocalizedException
      * @throws \Magento\Framework\Exception\ValidatorException
      */
-    protected function createSitemapFile(string $filename, bool $withImages)
+    private function createSitemapFile(string $filename, bool $withImages)
     {
-        // $_sitemapIncrement 600
-        /** @var $item SitemapItemInterface */
-        foreach ($this->_sitemapItems as $item) {
-            $url = $this->replaceUrlWithRewrite( $item->getUrl() );
-            if( $withImages && empty( $item->getImages() ) ) {
-                continue;
-            }
+        /** @var $sitemapItem \Magento\Framework\DataObject */
+        foreach ($this->_sitemapItems as $sitemapItem) {
+            $changefreq = $sitemapItem->getChangefreq();
+            $priority = $sitemapItem->getPriority();
+            foreach ($sitemapItem->getCollection() as $item) {
+                $url = $this->replaceUrlWithRewrite( $item->getUrl() );
+                if( $withImages && empty( $item->getImages() ) ) {
+                    continue;
+                }
+                $url = $this->checkUrlForUrlRewriteWithTrailingSlash( $url );
 
-            $url = $this->checkUrlForUrlRewriteWithTrailingSlash( $url );
-            $xml = $this->_getSitemapRow(
-                $url,
-                $item->getUpdatedAt(),
-                $item->getChangeFrequency(),
-                $item->getPriority(),
-                $withImages ? $item->getImages() : null
-            );
-            if ($this->_isSplitRequired($xml) && $this->_sitemapIncrement > 0) {
-                $this->_finalizeSitemap();
+                $xml = $this->_getSitemapRow(
+                    $url,
+                    $item->getUpdatedAt(),
+                    $changefreq,
+                    $priority,
+                    $withImages ? $item->getImages() : null
+                );
+                if ($this->_isSplitRequired($xml) && $this->_sitemapIncrement > 0) {
+                    $this->_finalizeSitemap();
+                }
+                if (!$this->_fileSize) {
+                    $this->_createSitemap();
+                }
+                $this->_writeSitemapRow($xml);
+                // Increase counters
+                $this->_lineCount++;
+                $this->_fileSize += strlen($xml);
             }
-            if (!$this->_fileSize) {
-                $this->_createSitemap();
-            }
-            $this->_writeSitemapRow($xml);
-            $this->_lineCount++;
-            $this->_fileSize += strlen($xml);
         }
 
         $this->_finalizeSitemap();
@@ -222,31 +316,42 @@ class Sitemap extends \Magento\Sitemap\Model\Sitemap
      */
     private function createSitemapImagesFile(string $filename, bool $withImages)
     {
-        // $_sitemapIncrement 600
-        /** @var $item SitemapItemInterface */
-        foreach ($this->_sitemapItems as $item) {
-            $url = $this->replaceUrlWithRewrite( $item->getUrl() );
-            if( $withImages && empty( $item->getImages() ) ) {
-                continue;
-            }
 
-            $url = $this->checkUrlForUrlRewriteWithTrailingSlash( $url );
-            $xml = $this->_getSitemapRow(
-                $url,
-                $item->getUpdatedAt(),
-                $item->getChangeFrequency(),
-                $item->getPriority(),
-                $withImages ? $item->getImages() : null
-            );
-            if ($this->_isSplitRequired($xml) && $this->_sitemapImagesIncrement > 0) {
-                $this->_finalizeSitemap();
+        /** @var $sitemapItem \Magento\Framework\DataObject */
+        foreach ($this->_sitemapItems as $sitemapItem) {
+            $changefreq = $sitemapItem->getChangefreq();
+            $priority = $sitemapItem->getPriority();
+            foreach ($sitemapItem->getCollection() as $item) {
+                $url = $this->replaceUrlWithRewrite( $item->getUrl() );
+                if( $withImages && empty( $item->getImages() ) )
+                {
+                    continue;
+                }
+                $url = $this->checkUrlForUrlRewriteWithTrailingSlash( $url );
+
+                $xml = $this->_getSitemapRow(
+                    $url,
+                    $item->getUpdatedAt(),
+                    $changefreq,
+                    $priority,
+                    $withImages ? $item->getImages() : null
+                );
+
+                if ($this->_isSplitRequired($xml) && $this->_sitemapImagesIncrement > 0)
+                {
+                    $this->_finalizeSitemap();
+                }
+
+                if (!$this->_fileSize)
+                {
+                    $this->createSitemapImages();
+                }
+
+                $this->_writeSitemapRow($xml);
+                // Increase counters
+                $this->_lineCount++;
+                $this->_fileSize += strlen($xml);
             }
-            if (!$this->_fileSize) {
-                $this->createSitemapImages();
-            }
-            $this->_writeSitemapRow($xml);
-            $this->_lineCount++;
-            $this->_fileSize += strlen($xml);
         }
 
         $this->_finalizeSitemap();
