@@ -49,7 +49,12 @@ class Category implements ObserverInterface
     /**
      * @var array
      */
-    private $matchedHandlers = array('diamondsearch_index_setting', 'catalog_category_view');
+    private $matchedHandlers = array('catalog_category_view');
+
+    /**
+     * @var \Mageinn\Seo\Helper\Data
+     */
+    private $helper;
     /**
      * Category constructor.
      * @param \Magento\Catalog\Helper\Category $categoryHelper
@@ -59,12 +64,14 @@ class Category implements ObserverInterface
     public function __construct(
         \Magento\Catalog\Helper\Category $categoryHelper,
         \Magento\Framework\View\Page\Config $pageConfig,
-        \Magento\Framework\UrlInterface $urlBuilder
+        \Magento\Framework\UrlInterface $urlBuilder,
+        \Mageinn\Seo\Helper\Data $helper
     )
     {
         $this->categoryHelper = $categoryHelper;
         $this->pageConfig = $pageConfig;
         $this->urlBuilder = $urlBuilder;
+        $this->helper = $helper;
     }
     /**
      * @param \Magento\Framework\Event\Observer $observer
@@ -72,59 +79,61 @@ class Category implements ObserverInterface
      */
     public function execute(\Magento\Framework\Event\Observer $observer)
     {
-        if (!in_array($observer->getEvent()->getFullActionName(), $this->matchedHandlers)) {
-            return $this;
-        }
-        /** @var \Magento\Catalog\Block\Product\ListProduct $productListBlock */
-        $productListBlock = $observer->getEvent()->getLayout()->getBlock('category.products.list');
-        if ($productListBlock) {
-            $category = $productListBlock->getLayer()->getCurrentCategory();
-        } else {
-            return $this;
-        }
-        /** remove default canonical tag */
-        if ($this->categoryHelper->canUseCanonicalTag()) {
-            $this->pageConfig->getAssetCollection()->remove($category->getUrl());
-        }
-        /** @var \Magento\Catalog\Block\Product\ProductList\Toolbar $toolbarBlock */
-        $toolbarBlock = $productListBlock->getToolbarBlock();
-        /** @var \Magento\Theme\Block\Html\Page $pageBlock */
-        $pagerBlock = $toolbarBlock->getChildBlock('product_list_toolbar_pager');
-        $pagerBlock->setAvailableLimit($toolbarBlock->getAvailableLimit())
-            ->setCollection($productListBlock->getLayer()->getProductCollection());
-        /** Add rel canonical with page  */
-        $this->pageConfig->addRemotePageAsset(
-            $this->getPageUrl(),
-            'canonical',
-            ['attributes' => ['rel' => 'canonical']]
-        );
-        $title = $observer->getEvent()->getLayout()->getBlock('page.main.title')->getPageTitle();
-        /** Add rel prev and rel next */
-        if (1 < $pagerBlock->getCurrentPage()) {
-            $observer->getEvent()->getLayout()->getBlock('page.main.title')->setPageTitle($title . " - Page " . $pagerBlock->getCurrentPage());
-            $this->pageConfig->getTitle()->set($title . " - Page " . $pagerBlock->getCurrentPage());
-            $prevPage = $pagerBlock->getCollection()->getCurPage(-1);
-            if($prevPage == 1) {
-                $params = [];
-            } else {
-                $params = [
-                    $pagerBlock->getPageVarName() => $prevPage
-                ];
+        if($this->helper->getActiveFlag()) {
+            if (!in_array($observer->getEvent()->getFullActionName(), $this->matchedHandlers)) {
+                return $this;
             }
+            /** @var \Magento\Catalog\Block\Product\ListProduct $productListBlock */
+            $productListBlock = $observer->getEvent()->getLayout()->getBlock('category.products.list');
+            if ($productListBlock) {
+                $category = $productListBlock->getLayer()->getCurrentCategory();
+            } else {
+                return $this;
+            }
+            /** remove default canonical tag */
+            if ($this->categoryHelper->canUseCanonicalTag()) {
+                $this->pageConfig->getAssetCollection()->remove($category->getUrl());
+            }
+            /** @var \Magento\Catalog\Block\Product\ProductList\Toolbar $toolbarBlock */
+            $toolbarBlock = $productListBlock->getToolbarBlock();
+            /** @var \Magento\Theme\Block\Html\Page $pageBlock */
+            $pagerBlock = $toolbarBlock->getChildBlock('product_list_toolbar_pager');
+            $pagerBlock->setAvailableLimit($toolbarBlock->getAvailableLimit())
+                ->setCollection($productListBlock->getLayer()->getProductCollection());
+            /** Add rel canonical with page  */
             $this->pageConfig->addRemotePageAsset(
-                $this->getPageUrl($params),
-                'link_rel',
-                ['attributes' => ['rel' => 'prev']]
+                $this->getPageUrl(),
+                'canonical',
+                ['attributes' => ['rel' => 'canonical']]
             );
-        }
-        if ($pagerBlock->getCurrentPage() < $pagerBlock->getLastPageNum()) {
-            $this->pageConfig->addRemotePageAsset(
-                $this->getPageUrl([
-                    $pagerBlock->getPageVarName() => $pagerBlock->getCollection()->getCurPage(+1)
-                ]),
-                'link_rel',
-                ['attributes' => ['rel' => 'next']]
-            );
+            $title = $observer->getEvent()->getLayout()->getBlock('page.main.title')->getPageTitle();
+            /** Add rel prev and rel next */
+            if (1 < $pagerBlock->getCurrentPage()) {
+                $observer->getEvent()->getLayout()->getBlock('page.main.title')->setPageTitle($title . " - Page " . $pagerBlock->getCurrentPage());
+                $this->pageConfig->getTitle()->set($title . " - Page " . $pagerBlock->getCurrentPage());
+                $prevPage = $pagerBlock->getCollection()->getCurPage(-1);
+                if ($prevPage == 1) {
+                    $params = [];
+                } else {
+                    $params = [
+                        $pagerBlock->getPageVarName() => $prevPage
+                    ];
+                }
+                $this->pageConfig->addRemotePageAsset(
+                    $this->getPageUrl($params),
+                    'link_rel',
+                    ['attributes' => ['rel' => 'prev']]
+                );
+            }
+            if ($pagerBlock->getCurrentPage() < $pagerBlock->getLastPageNum()) {
+                $this->pageConfig->addRemotePageAsset(
+                    $this->getPageUrl([
+                        $pagerBlock->getPageVarName() => $pagerBlock->getCollection()->getCurPage(+1)
+                    ]),
+                    'link_rel',
+                    ['attributes' => ['rel' => 'next']]
+                );
+            }
         }
     }
     /**

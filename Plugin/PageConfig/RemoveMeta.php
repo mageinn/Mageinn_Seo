@@ -37,10 +37,14 @@ class RemoveMeta
      * RemoveMeta constructor.
      * @param \Magento\Framework\App\RequestInterface $request
      */
+    protected $helper;
+
     public function __construct(
-        \Magento\Framework\App\RequestInterface $request
+        \Magento\Framework\App\RequestInterface $request,
+        \Mageinn\Seo\Helper\Data $helper
     ) {
         $this->request = $request;
+        $this->helper = $helper;
     }
     /**
      * @param $subject
@@ -49,8 +53,11 @@ class RemoveMeta
      */
     public function afterGetDescription(\Magento\Framework\View\Page\Config $subject, $return)
     {
-        if ( (int) $this->request->getParam('p') > 1) {
-            return '';
+        if($this->helper->getActiveFlag()) {
+            if ((int)$this->request->getParam('p') > 1) {
+                return '';
+            }
+            return $return;
         }
         return $return;
     }
@@ -61,8 +68,11 @@ class RemoveMeta
      */
     public function afterGetKeywords(\Magento\Framework\View\Page\Config $subject, $return)
     {
-        if ( (int) $this->request->getParam('p') > 1) {
-            return '';
+        if($this->helper->getActiveFlag()) {
+            if ((int)$this->request->getParam('p') > 1) {
+                return '';
+            }
+            return $return;
         }
         return $return;
     }

@@ -33,29 +33,49 @@ namespace Mageinn\Seo\Plugin;
 class UpdateGalleryItemsData
 {
     /**
+     * @var \Mageinn\Seo\Helper\Data
+     */
+    protected $helper;
+
+    /**
+     * UpdateGalleryItemsData constructor.
+     * @param \Mageinn\Seo\Helper\Data $helper
+     */
+    public function __construct(
+        \Mageinn\Seo\Helper\Data $helper
+    )
+    {
+        $this->helper = $helper;
+    }
+
+    /**
      * @param \Magento\Catalog\Block\Product\View\Gallery $subject
      * @param $result
      * @return string
      */
     public function afterGetGalleryImagesJson(\Magento\Catalog\Block\Product\View\Gallery $subject, $result)
     {
-        $result = json_decode($result, TRUE);
-        $videoCounter = 0;
-        $imgCounter = 0;
-        foreach ($result as $key => &$item){
-            switch ($item['type']) {
-                case 'image':
-                    $captionPrefix = 'Photo ' . ++$imgCounter . ':';
-                    break;
-                case 'video':
-                    $captionPrefix = 'Video ' . ++$videoCounter . ':';
-                    break;
-                default:
-                    $captionPrefix = '';
-                    break;
+        if($this->helper->getActiveFlag()){
+            $result = json_decode($result, TRUE);
+            $videoCounter = 0;
+            $imgCounter = 0;
+            foreach ($result as $key => &$item){
+                switch ($item['type']) {
+                    case 'image':
+                        $captionPrefix = 'Photo ' . ++$imgCounter . ':';
+                        break;
+                    case 'video':
+                        $captionPrefix = 'Video ' . ++$videoCounter . ':';
+                        break;
+                    default:
+                        $captionPrefix = '';
+                        break;
+                }
+                $result[$key]['caption'] = $captionPrefix . $item['caption'];
             }
-            $result[$key]['caption'] = $captionPrefix . $item['caption'];
+            return json_encode($result);
         }
-        return json_encode($result);
+
+        return $result;
     }
 }
