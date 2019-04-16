@@ -60,6 +60,10 @@ class Breadcrumbs extends DataObject implements ArgumentInterface
      */
     private $escaper;
     /**
+     * @var \Mageinn\Seo\Helper\Data
+     */
+    private $helper;
+    /**
      * Breadcrumbs constructor.
      * @param Data $catalogData
      * @param ScopeConfigInterface $scopeConfig
@@ -71,6 +75,7 @@ class Breadcrumbs extends DataObject implements ArgumentInterface
         Data $catalogData,
         ScopeConfigInterface $scopeConfig,
         CategoryRepositoryInterface $categoryRepository,
+        \Mageinn\Seo\Helper\Data $helper,
         Json $json = null,
         Escaper $escaper = null
     ) {
@@ -79,6 +84,7 @@ class Breadcrumbs extends DataObject implements ArgumentInterface
         $this->scopeConfig = $scopeConfig;
         $this->escaper = $escaper ?: ObjectManager::getInstance()->get(Escaper::class);
         $this->categoryRepository = $categoryRepository;
+        $this->helper = $helper;
     }
     /**
      * Returns category URL suffix.
@@ -161,7 +167,8 @@ class Breadcrumbs extends DataObject implements ArgumentInterface
                     'categoryUrlSuffix' => $this->escaper->escapeHtml($this->getCategoryUrlSuffix()),
                     'userCategoryPathInUrl' => (int)$this->isCategoryUsedInProductUrl(),
                     'product' => $this->escaper->escapeHtml($this->getProductName()),
-                    'mainCategory' => $this->getProductMainCategory()
+                    'mainCategory' => $this->getProductMainCategory(),
+                    'moduleEnable' => $this->helper->getActiveFlag()
                 ]
             ],
             JSON_HEX_TAG

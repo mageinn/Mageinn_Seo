@@ -12,6 +12,7 @@ define([
             useCategoryPathInUrl: false,
             product: '',
             mainCategory: '',
+            moduleEnable: false,
             categoryItemSelector: '.category-item',
             menuContainer: '[data-action="navigation"] > ul'
          },
@@ -28,8 +29,16 @@ define([
           * @private
           */
          _appendCatalogCrumbs: function () {
-            if (this.options.mainCategory) {
-               breadcrumbList.push(this.options.mainCategory);
+            if(this.options.moduleEnable){
+               if (this.options.mainCategory) {
+                  breadcrumbList.push(this.options.mainCategory);
+               }
+            }else{
+               var categoryCrumbs = this._resolveCategoryCrumbs();
+
+               categoryCrumbs.forEach(function (crumbInfo) {
+                  breadcrumbList.push(crumbInfo);
+               });
             }
 
             if (this.options.product) {
