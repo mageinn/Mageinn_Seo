@@ -44,16 +44,23 @@ class Title extends \Magento\Framework\View\Page\Title
      */
     private $request;
     /**
+     * @var \Mageinn\Seo\Helper\Data
+     */
+    private $helper;
+    /**
      * Title constructor.
      * @param \Magento\Framework\App\Request\Http $request
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
+     * @param \Mageinn\Seo\Helper\Data $helper
      */
     public function __construct(
         \Magento\Framework\App\Request\Http $request,
-        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
+        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
+        \Mageinn\Seo\Helper\Data $helper
     ) {
         $this->request = $request;
         $this->scopeConfig = $scopeConfig;
+        $this->helper = $helper;
         parent::__construct($scopeConfig);
     }
     /**
@@ -62,17 +69,21 @@ class Title extends \Magento\Framework\View\Page\Title
      */
     protected function addConfigValues($title)
     {
-        $preparedTitle = $this->scopeConfig->getValue(
-                'design/head/title_prefix',
-                \Magento\Store\Model\ScopeInterface::SCOPE_STORE
-            ) . ' ' . $title;
-        $postfix = ' ' . $this->scopeConfig->getValue(
-                'design/head/title_suffix',
-                \Magento\Store\Model\ScopeInterface::SCOPE_STORE
-            );
-        if ($this->request->getFullActionName() == 'cms_index_index') {
-            $postfix = '';
+        if($this->helper->getActiveFlag()) {
+            $preparedTitle = $this->scopeConfig->getValue(
+                    'design/head/title_prefix',
+                    \Magento\Store\Model\ScopeInterface::SCOPE_STORE
+                ) . ' ' . $title;
+            $postfix = ' ' . $this->scopeConfig->getValue(
+                    'design/head/title_suffix',
+                    \Magento\Store\Model\ScopeInterface::SCOPE_STORE
+                );
+            if ($this->request->getFullActionName() == 'cms_index_index') {
+                $postfix = '';
+            }
+            return trim($preparedTitle . $postfix);
         }
-        return trim($preparedTitle . $postfix);
+
+        return parent::addConfigValues($title);
     }
 }
